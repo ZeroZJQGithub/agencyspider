@@ -1,5 +1,6 @@
 /*.csv
 /scrapy.log
 /images
-/unsoldspider/__pycache__
-/unsoldspider/spiders/__pycache__
+/agencyspider/__pycache__
+/agencyspider/spiders/__pycache__
+/.vscode
