@@ -1,0 +1,5 @@
+/*.csv
+/scrapy.log
+/images
+/unsoldspider/__pycache__
+/unsoldspider/spiders/__pycache__
