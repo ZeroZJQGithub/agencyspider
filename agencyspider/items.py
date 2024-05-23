@@ -22,5 +22,6 @@ class AgencyspiderItem(scrapy.Item):
     agency_homue_logo = scrapy.Field()
     physical_address = scrapy.Field()
     postal_address = scrapy.Field()
+    is_live = scrapy.Field()
     created_at = scrapy.Field()
     updated_at = scrapy.Field()

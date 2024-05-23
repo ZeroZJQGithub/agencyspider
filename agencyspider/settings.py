@@ -21,7 +21,9 @@ ROBOTSTXT_OBEY = True
 
 LOG_FILE='./scrapy.log'
 # LOG_LEVEL='ERROR'
-LOG_LEVEL='DEBUG'
+LOG_LEVEL='INFO'
+
+IMAGES_STORE='./images'
 
 # Configure maximum concurrent requests performed by Scrapy (default: 16)
 #CONCURRENT_REQUESTS = 32
@@ -66,9 +68,10 @@ LOG_LEVEL='DEBUG'
 
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-#ITEM_PIPELINES = {
-#    "agencyspider.pipelines.AgencyspiderPipeline": 300,
-#}
+ITEM_PIPELINES = {
+   "agencyspider.pipelines.AgencyspiderPipeline": 300,
+   "agencyspider.pipelines.AgencyImagesPipeline": 400
+}
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html
@@ -97,7 +100,7 @@ TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
 
 # Set setting to connect mysql database
-DB_HOST = "192.168.150.128"
+DB_HOST = "192.168.117.128"
 DB_USER = "root"
 DB_PASSWORD = "123456"
 DB_DATABASE = "homue_api"
