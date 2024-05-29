@@ -34,9 +34,17 @@ def parse_origin_address(conn):
         data_id = row[0]
         physical_address = json.loads(row[1])
         postal_address = json.loads(row[2])
-        city_name = physical_address.get('city') if physical_address.get('city', None) is not None else postal_address.get('city', None)
+        city_name = physical_address.get('city', None)
+
+        if city_name is None:
+            city_name = postal_address.get('city', None)
+        
         district_name = physical_address.get('address3', None)
+        if district_name is None:
+            district_name = postal_address.get('address3', None)
+        
         detail_address = physical_address.get('address1', None)
+        
         if city_name is None and district_name is None:
             if (detail_address is not None) and (len(detail_address.split(',')) > 1):
                 district_name = detail_address.split(',')[-1].strip()
@@ -47,7 +55,12 @@ def parse_origin_address(conn):
             
         if (detail_address is None) or (len(detail_address.split(' ')) == 1):
             detail_address = postal_address.get('address1', None)
-        sync_agencies_to_homue(cursor=cursor, data_id = data_id, city_name=city_name, district_name=district_name)
+        
+        print(f"{data_id} city_name: {city_name}")
+        print(f"{data_id} district_name: {district_name}")
+        print(f"{data_id} detail_address: {detail_address}")
+        
+        # sync_agencies_to_homue(cursor=cursor, data_id = data_id, city_name=city_name, district_name=district_name)
         # agency_address_dict = {"detail_address": detail_address}
         # if district_name is not None:
         #     district_query_result = query_region_city_info(cursor=cursor, query_name=district_name, type='district')
@@ -113,7 +126,7 @@ def parse_address(cursor, agency_address_dict):
         pass
     
     if city_id > 0:
-        sql = f"SELECT nz_region.id AS region_id, nz_region.`name` AS region_name, b.id AS city_id, b.name AS city_name FROM (SELECT * FROM nz_city WHERE id={city_id}) b JOIN nz_region ON b.region_id=nz_region.id"
+        sql = f"SELECT nz_region.id AS region_id, nz_region.name AS region_name, b.id AS city_id, b.name AS city_name FROM (SELECT * FROM nz_city WHERE id={city_id}) b JOIN nz_region ON b.region_id=nz_region.id"
         cursor.execute(sql)
         nz_city_result = cursor.fetchone()
         if nz_city_result:
@@ -128,11 +141,34 @@ def sync_agencies_to_homue(cursor, data_id, city_name, district_name):
         city_name = 'Mount Eden'
     if district_name == 'Mt Eden':
         district_name = 'Mount Eden'    
-    district_sql = f"SELECT * FROM nz_district WHERE name LIKE '{district_name}%' LIMIT 1"
-    city_sql = f"SELECT * FROM nz_city WHERE name LIKE '{city_name}%' LIMIT 1"
-    print(f"{data_id}: {district_sql}")
-    print(f"{data_id}: {city_sql}")
-
+    query_district_in_district = f"SELECT * FROM nz_district WHERE name LIKE '{district_name}%' LIMIT 1"
+    query_district_in_city = f"SELECT * FROM nz_city WHERE name LIKE '{district_name}%' LIMIT 1"
+    query_city_in_district = f"SELECT * FROM nz_district WHERE name LIKE '{city_name}%' LIMIT 1"
+    query_city_in_city = f"SELECT * FROM nz_city WHERE name LIKE '{city_name}%' LIMIT 1"
+    # print(f"{data_id}: {query_district_in_district}")
+    # print(f"{data_id}: {query_district_in_city}")
+    # print(f"{data_id}: {query_city_in_district}")
+    # print(f"{data_id}: {query_city_in_city}")
+    cursor.execute(query_district_in_district)
+    district_in_district_result = cursor.fetchone()
+    if district_in_district_result:
+        print(f"{data_id} district_in_district_result: {district_in_district_result[0]} - {district_in_district_result[1]} - {district_in_district_result[2]}")
+        
+    cursor.execute(query_district_in_city)
+    district_in_city_result = cursor.fetchone()
+    if district_in_city_result:
+        print(f"{data_id} district_in_city_result: {district_in_city_result[0]} - {district_in_city_result[1]} - {district_in_city_result[2]}")
+        
+    cursor.execute(query_city_in_district)
+    city_in_district_result = cursor.fetchone()
+    if city_in_district_result:
+        print(f"{data_id} city_in_district_result: {city_in_district_result[0]} - {city_in_district_result[1]} - {city_in_district_result[2]}")  
+        
+    cursor.execute(query_city_in_city)
+    city_in_city_result = cursor.fetchone()
+    if city_in_city_result:
+        print(f"{data_id} city_in_city_result: {city_in_city_result[0]} - {city_in_city_result[1]} - {city_in_city_result[2]}")
+                      
 #同步house_agency数据库
 def update_homue_agencies(conn):
     cursor = conn.cursor()
@@ -141,7 +177,7 @@ def update_homue_agencies(conn):
     results = cursor.fetchall()
     sync_agencies = []
     for item in results:
-        sync_agencies.append((item[0]))
+        sync_agencies.append((item[0].strip()))
     
     sync_agencies_sql = "INSERT IGNORE INTO house_agency(name) VALUES (%s)"
     cursor.executemany(sync_agencies_sql, sync_agencies)
