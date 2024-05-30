@@ -27,148 +27,107 @@ def start_sync_local_images(conn):
 
 def parse_origin_address(conn):
     cursor = conn.cursor()
-    sql = "SELECT id, physical_address, postal_address FROM homue_spider_agencies"
+    sql = "SELECT id, physical_address, postal_address FROM homue_spider_agencies WHERE parse_address IS NULL"
     cursor.execute(sql)
     results = cursor.fetchall()
     for row in results:
         data_id = row[0]
         physical_address = json.loads(row[1])
         postal_address = json.loads(row[2])
-        city_name = physical_address.get('city', None)
 
-        if city_name is None:
-            city_name = postal_address.get('city', None)
-        
-        district_name = physical_address.get('address3', None)
-        if district_name is None:
-            district_name = postal_address.get('address3', None)
-        
+        district_name = physical_address.get('city', None)
+        address3 = physical_address.get('address3', None)
         detail_address = physical_address.get('address1', None)
-        
-        if city_name is None and district_name is None:
-            if (detail_address is not None) and (len(detail_address.split(',')) > 1):
-                district_name = detail_address.split(',')[-1].strip()
-                
-        if (detail_address is not None) and (len(detail_address.split(' ')) == 1):
-            if district_name is None:
-                district_name = detail_address
-            
-        if (detail_address is None) or (len(detail_address.split(' ')) == 1):
-            detail_address = postal_address.get('address1', None)
-        
-        print(f"{data_id} city_name: {city_name}")
-        print(f"{data_id} district_name: {district_name}")
-        print(f"{data_id} detail_address: {detail_address}")
-        
-        # sync_agencies_to_homue(cursor=cursor, data_id = data_id, city_name=city_name, district_name=district_name)
-        # agency_address_dict = {"detail_address": detail_address}
-        # if district_name is not None:
-        #     district_query_result = query_region_city_info(cursor=cursor, query_name=district_name, type='district')
-        #     if district_query_result is not None:
-        #         agency_address_dict.update(district_query_result)                  
-        #     else:
-        #         result = query_region_city_info(cursor=cursor, query_name=city_name, type='city')
-        #         if result:
-        #             agency_address_dict.update(result)
-        # elif city_name is not None:
-        #     result = query_region_city_info(cursor=cursor, query_name=city_name, type='city')
-        #     agency_address_dict.update(result)
 
-        # agency_parse_address = parse_address(cursor=cursor, agency_address_dict=agency_address_dict)
-        # print(f'{data_id}: {agency_parse_address}')
-        # add_parse_sql = "UPDATE homue_spider_agencies SET parse_address=%s WHERE id=%s"
-        # cursor.execute(add_parse_sql, (json.dumps(agency_parse_address), data_id))
-        # conn.commit()        
+        district_query_result = query_district_info(cursor=cursor, district_name=district_name, address3=address3)
+        
+        agency_address_dict = {"detail_address": detail_address}
+        if len(district_query_result) > 0:
+            agency_address_dict.update(district_query_result)
+
+        agency_parse_address = parse_address(cursor=cursor, agency_address_dict=agency_address_dict)
+        print(f'{data_id}: {agency_parse_address}')
+        add_parse_sql = "UPDATE homue_spider_agencies SET parse_address=%s WHERE id=%s"
+        cursor.execute(add_parse_sql, (json.dumps(agency_parse_address), data_id))
+        conn.commit()        
     cursor.close()
 
-def query_region_city_info(cursor, query_name, type):
-    agency_address_dict = {}
-    # if (query_name == 'Hawkes bay') and (type== 'district'):
-    #     return None
-
-    district_sql = f"SELECT * FROM nz_district WHERE name LIKE '{query_name}%' LIMIT 1"
+def query_district_info(cursor, district_name, address3):
+    district_name = district_name.lower() if district_name else None
+    address3 = address3.lower() if address3 else None
+    
+    if district_name and ('mt ' in district_name):
+        district_name = district_name.replace('mt ', 'mount ')
+    if address3 and ('Mt ' in address3):
+        address3 = address3.replace('mt ', 'mount ')
+    if district_name and ('st ' in district_name):
+        district_name = district_name.replace('st ', 'saint ')
+    if address3 and ('st ' in address3):
+        address3 = address3.replace('st ', 'saint ')
+    if district_name and ('cbd' in district_name):
+        district_name = district_name.replace('cbd', 'central')
+    if address3 and ('cbd' in address3):
+        address3 = address3.replace('cbd', 'central') 
+  
+    district_info_dict = {}
+    district_sql = f"SELECT * FROM nz_district WHERE name LIKE '{district_name}%' LIMIT 1"
     cursor.execute(district_sql)
     nz_district_result = cursor.fetchone()
-    if nz_district_result is not None:
-        agency_address_dict.update({"district": {"id": nz_district_result[0], "city_id": nz_district_result[1], "name": nz_district_result[2]}})
+    if nz_district_result:
+        district_info_dict.update({"district": {"id": nz_district_result[0], "city_id": nz_district_result[1], "name": nz_district_result[2]}})     
     else:
-        city_sql = f"SELECT * FROM nz_city WHERE name LIKE '{query_name}%' LIMIT 1"
+        city_sql = f"SELECT * FROM nz_district WHERE name LIKE '{address3}%' LIMIT 1"
         cursor.execute(city_sql)
-        nz_city_result = cursor.fetchone()        
-        if nz_city_result is not None:
-            agency_address_dict.update({"city": {"id": nz_city_result[0], "region_id": nz_city_result[1], "name": nz_city_result[2]}})
-        else:
-            region_sql = f"SELECT * FROM nz_region WHERE name LIKE '{query_name}%' LIMIT 1"
-            cursor.execute(region_sql)
-            nz_region_result = cursor.fetchone()   
-            if nz_region_result is not None:
-                agency_address_dict.update({"region": {"id": nz_region_result[0], "name": nz_region_result[1]}})                        
-    return agency_address_dict
+        nz_district_result = cursor.fetchone()
+        if nz_district_result:
+            district_info_dict.update({"district": {"id": nz_district_result[0], "city_id": nz_district_result[1], "name": nz_district_result[2]}})
+    # cursor.close()
+    return district_info_dict
 
 def parse_address(cursor, agency_address_dict):
-    # agencies_parse_address = []
     agencies_parse_address = {}
-    region_dict = agency_address_dict.get('region', None)
-    city_dict = agency_address_dict.get('city', None)
     district_dict = agency_address_dict.get('district', None)
     detail_address = agency_address_dict.get('detail_address', None)
+    address = detail_address if detail_address else ''
     city_id = 0
     if district_dict is not None:
         district_name = district_dict.get('name')
         district_id = district_dict.get('id')
         city_id = district_dict.get('city_id')
         agencies_parse_address.update({"district_id": district_id, "district_name": district_name})
-    elif city_dict is not None:
-        city_id = city_dict.get('id')
-    elif region_dict is not None:
-        agencies_parse_address.update({"region_id": region_dict.get('id'), "region_name": region_dict.get('name')})
-    else:
-        pass
-    
+        address = f"{address}, {district_name}"
     if city_id > 0:
         sql = f"SELECT nz_region.id AS region_id, nz_region.name AS region_name, b.id AS city_id, b.name AS city_name FROM (SELECT * FROM nz_city WHERE id={city_id}) b JOIN nz_region ON b.region_id=nz_region.id"
         cursor.execute(sql)
         nz_city_result = cursor.fetchone()
         if nz_city_result:
             agencies_parse_address.update({"region_id": nz_city_result[0], "region_name": nz_city_result[1], "city_id": nz_city_result[2], "city_name": nz_city_result[3]})
-            
-    address = f"{detail_address}, {agencies_parse_address.get('district_name')}, {agencies_parse_address.get('city_name')}, {agencies_parse_address.get('region_name')}" 
+            address = f"{address}, {nz_city_result[3]}, {nz_city_result[1]}"
     agencies_parse_address.update({"address": address})
     return agencies_parse_address   
 
-def sync_agencies_to_homue(cursor, data_id, city_name, district_name):
-    if city_name == 'Mt Eden':
-        city_name = 'Mount Eden'
-    if district_name == 'Mt Eden':
-        district_name = 'Mount Eden'    
-    query_district_in_district = f"SELECT * FROM nz_district WHERE name LIKE '{district_name}%' LIMIT 1"
-    query_district_in_city = f"SELECT * FROM nz_city WHERE name LIKE '{district_name}%' LIMIT 1"
-    query_city_in_district = f"SELECT * FROM nz_district WHERE name LIKE '{city_name}%' LIMIT 1"
-    query_city_in_city = f"SELECT * FROM nz_city WHERE name LIKE '{city_name}%' LIMIT 1"
-    # print(f"{data_id}: {query_district_in_district}")
-    # print(f"{data_id}: {query_district_in_city}")
-    # print(f"{data_id}: {query_city_in_district}")
-    # print(f"{data_id}: {query_city_in_city}")
-    cursor.execute(query_district_in_district)
-    district_in_district_result = cursor.fetchone()
-    if district_in_district_result:
-        print(f"{data_id} district_in_district_result: {district_in_district_result[0]} - {district_in_district_result[1]} - {district_in_district_result[2]}")
-        
-    cursor.execute(query_district_in_city)
-    district_in_city_result = cursor.fetchone()
-    if district_in_city_result:
-        print(f"{data_id} district_in_city_result: {district_in_city_result[0]} - {district_in_city_result[1]} - {district_in_city_result[2]}")
-        
-    cursor.execute(query_city_in_district)
-    city_in_district_result = cursor.fetchone()
-    if city_in_district_result:
-        print(f"{data_id} city_in_district_result: {city_in_district_result[0]} - {city_in_district_result[1]} - {city_in_district_result[2]}")  
-        
-    cursor.execute(query_city_in_city)
-    city_in_city_result = cursor.fetchone()
-    if city_in_city_result:
-        print(f"{data_id} city_in_city_result: {city_in_city_result[0]} - {city_in_city_result[1]} - {city_in_city_result[2]}")
-                      
+
+def sync_agency_branch_tohomue(conn):
+    sql = 'SELECT house_agency.id AS agency_id, colloquial_name, homue_spider_agencies.name, phone, parse_address, agency_homue_logo FROM homue_spider_agencies JOIN house_agency ON homue_spider_agencies.colloquial_name = house_agency.name'
+    cursor = conn.cursor()
+    cursor.execute(sql)
+    results = cursor.fetchall()
+    sync_agencies = []
+    for item in results:
+        parse_address = json.loads(item[4])
+        address = parse_address.get('address') if parse_address.get('address') != '' else None
+        region_id = parse_address.get('region_id')
+        region_name = parse_address.get('region_name')
+        city_id = parse_address.get('city_id')
+        city_name = parse_address.get('city_name')
+        district_id = parse_address.get('district_id')
+        sync_agencies.append((item[0], item[1], item[2], address, region_id, region_name, city_id, city_name, district_id, item[3],item[5]))
+
+    sync_agencies_sql = "INSERT IGNORE INTO house_agency_branch(agency_id, agency_name, branch_name, address, region_id, region, city_id, city, district_id, phone, agency_logo) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+    cursor.executemany(sync_agencies_sql, sync_agencies)
+    conn.commit()
+    cursor.close()         
+
 #同步house_agency数据库
 def update_homue_agencies(conn):
     cursor = conn.cursor()
@@ -199,4 +158,5 @@ if __name__ == '__main__':
     update_homue_agencies(conn=conn)
     start_sync_local_images(conn=conn)
     parse_origin_address(conn=conn)
+    sync_agency_branch_tohomue(conn=conn)
     conn.close()
