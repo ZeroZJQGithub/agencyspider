@@ -108,7 +108,7 @@ def parse_address(cursor, agency_address_dict):
 
 
 def sync_agency_branch_tohomue(conn):
-    sql = 'SELECT house_agency.id AS agency_id, colloquial_name, homue_spider_agencies.name, phone, parse_address, agency_homue_logo FROM homue_spider_agencies JOIN house_agency ON homue_spider_agencies.colloquial_name = house_agency.name'
+    sql = 'SELECT house_agency.id AS agency_id, colloquial_name, homue_spider_agencies.name, phone, parse_address, agency_homue_logo, email, website_url FROM homue_spider_agencies JOIN house_agency ON homue_spider_agencies.colloquial_name = house_agency.name'
     cursor = conn.cursor()
     cursor.execute(sql)
     results = cursor.fetchall()
@@ -121,9 +121,9 @@ def sync_agency_branch_tohomue(conn):
         city_id = parse_address.get('city_id')
         city_name = parse_address.get('city_name')
         district_id = parse_address.get('district_id')
-        sync_agencies.append((item[0], item[1], item[2], address, region_id, region_name, city_id, city_name, district_id, item[3],item[5]))
+        sync_agencies.append((item[0], item[1], item[2], address, region_id, region_name, city_id, city_name, district_id, item[3],item[5], item[6], item[7]))
 
-    sync_agencies_sql = "INSERT IGNORE INTO house_agency_branch(agency_id, agency_name, branch_name, address, region_id, region, city_id, city, district_id, phone, agency_logo) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+    sync_agencies_sql = "INSERT IGNORE INTO house_agency_branch(agency_id, agency_name, branch_name, address, region_id, region, city_id, city, district_id, phone, agency_logo, email, website_url) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
     cursor.executemany(sync_agencies_sql, sync_agencies)
     conn.commit()
     cursor.close()         
