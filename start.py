@@ -20,7 +20,8 @@ def start_sync_local_images(conn):
             image_name = web_logo_url.split('/')[-1]
             if os.path.exists(f'{image_path}/{image_name}'):
                 sql = "UPDATE homue_spider_agencies SET agency_homue_logo=%s WHERE id=%s"
-                cursor.execute(sql, (image_name, data_id))
+                homue_image_name = f"https://homuestoragedev.blob.core.windows.net/agencies-logo/images/{image_name}"
+                cursor.execute(sql, (homue_image_name, data_id))
                 conn.commit()
     cursor.close()
     print('Sync Local Logo Done!')
