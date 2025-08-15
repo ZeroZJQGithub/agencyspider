@@ -4,3 +4,5 @@
 /__pycache__/
 /spiders/__pycache__
 /.vscode
+/*.xlsx
+/*.xls

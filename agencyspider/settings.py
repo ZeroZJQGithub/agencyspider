@@ -100,15 +100,16 @@ TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
 
 # Set setting to connect mysql database
-# DB_HOST = "192.168.117.128"
-# DB_USER = "root"
-# DB_PASSWORD = "123456"
-# DB_DATABASE = "homue_api"
-# DB_PORT = 3366
+# Set setting to connect api-db docker mysql database
+DB_HOST = "localhost"
+DB_USER = "root"
+DB_PASSWORD = "123456"
+DB_DATABASE = "homue_api"
+DB_PORT = 3366
 
 # Setings to connect server mysql
-DB_HOST = "homue-dev-mysql.ckdssrns2bi1.ap-southeast-2.rds.amazonaws.com"
-DB_USER = "admin"
-DB_PASSWORD = "gorsuj2nigpy"
-DB_DATABASE = "homue_api"
-DB_PORT = 3306
+# DB_HOST = "homue-dev-mysql.ckdssrns2bi1.ap-southeast-2.rds.amazonaws.com"
+# DB_USER = "admin"
+# DB_PASSWORD = "gorsuj2nigpy"
+# DB_DATABASE = "homue_api"
+# DB_PORT = 3306

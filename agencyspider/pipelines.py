@@ -16,12 +16,14 @@ import json
 from datetime import datetime
 from slugify import slugify
 import scrapy
+from fuzzywuzzy import process
 
 
 class AgencyspiderPipeline:
     def __init__(self, db_settings=None) -> None:
         self.db_settings = db_settings
         self.insert_items = []
+        self.insert_agents_items = []
         self.item_count = 0
         self.media_url = "https://mediaserver.realestate.co.nz"
 
@@ -45,10 +47,21 @@ class AgencyspiderPipeline:
                 database=self.db_settings.get('DB_DATABASE'), 
                 port=self.db_settings.get('DB_PORT')
             )
+        
+        sql = f"SELECT id, fq_slug FROM nz_district"
+        cursor = self.conn.cursor()
+        cursor.execute(sql)
+        nz_district_results = cursor.fetchall()
+        self.nz_districts = [item[1] for item in nz_district_results]
+        cursor.close()       
 
     def close_spider(self, spider):
         if self.item_count > 0:
-            self.insert_items_to_database(self.insert_items)
+            self.insert_agency_to_database(self.insert_items)
+            
+        if len(self.insert_agents_items) > 0:
+            self.insert_agents_to_database(self.insert_agents_items)
+            
         self.conn.close()
 
     def process_item(self, item, spider):
@@ -73,19 +86,37 @@ class AgencyspiderPipeline:
         office_id = item.get('office_id', None)
         if office_id is not None:
             item['office_id'] = str(office_id)
+        
+        detail_address = item.get('detail_address')
+        item['detail_address'] = detail_address.strip()
+        
+        if item.get('city_name') is not None:
+            self.match_district, score = process.extractOne(slugify(item.get('city_name')), self.nz_districts)
+            logging.info(f"{item.get('detail_address')}: {self.match_district}: {score}")
+        else:
+            self.match_district = None
 
         self.insert_items.append((item.get('colloquial_name'), item.get('slug_colloquial_name'), item.get('name'), 
                                   item.get('slug_name'), item.get('phone'), item.get('email'), item.get('office_id'),
                                   item.get('website_url'), item.get('agency_websit_logo'), item.get('physical_address'), 
-                                  item.get('postal_address'), item.get('is_live'), item.get('created_at'), item.get('updated_at')))
+                                  item.get('postal_address'), item.get('detail_address'), item.get('is_live'), self.match_district, item.get('created_at'), item.get('updated_at')))
+        
+        agents_insert_data = item.get('agents')
+        if len(agents_insert_data) > 0:
+            # logging.info(agents_insert_data)
+            self.insert_agents_items += agents_insert_data
+            
+        if len(self.insert_agents_items) > 200:
+            self.insert_agents_to_database(self.insert_agents_items)
+        
         self.item_count += 1
-        if self.item_count == 100:
-            self.insert_items_to_database(self.insert_items)
+        if self.item_count >= 100:
+            self.insert_agency_to_database(self.insert_items)
         return item
     
-    def insert_items_to_database(self, insert_data):
+    def insert_agency_to_database(self, insert_data):
         try:
-            sql = "INSERT INTO homue_spider_agencies(colloquial_name, slug_colloquial_name, name, slug_name, phone, email, office_id, website_url, agency_websit_logo, physical_address, postal_address, is_live, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE updated_at=VALUES(updated_at)"
+            sql = "INSERT INTO homue_spider_agencies(colloquial_name, slug_colloquial_name, name, slug_name, phone, email, office_id, website_url, agency_websit_logo, physical_address, postal_address, detail_address, is_live, district_name, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE updated_at=VALUES(updated_at)"
             cursor = self.conn.cursor()
             cursor.executemany(sql, insert_data)
             self.conn.commit()                
@@ -93,7 +124,18 @@ class AgencyspiderPipeline:
             self.insert_items.clear()
             self.item_count = 0
         except:
-            print("Insert Into Database Unexpected error:", sys.exc_info()[0])
+            print("Insert Agencies Into Database Unexpected error:", sys.exc_info()[0])
+            
+    def insert_agents_to_database(self, insert_data):
+        try:
+            sql = "INSERT INTO third_party_agents(agent_id, origin_party, updated_at) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE updated_at=VALUES(updated_at)"
+            cursor = self.conn.cursor()
+            cursor.executemany(sql, insert_data)
+            self.conn.commit()                
+            cursor.close()
+            self.insert_agents_items.clear()
+        except:
+            print("Insert Agents Into Database Unexpected error:", sys.exc_info()[0])                    
 
 class AgencyImagesPipeline(ImagesPipeline):
     def file_path(self, request, response=None, info=None, *, item=None):
@@ -112,7 +154,8 @@ class AgencyImagesPipeline(ImagesPipeline):
         image_paths = [x['path'] for ok, x in results if ok]
         if not image_paths:
             #  item['agency_homue_logo'] = None
-            raise DropItem("Item contains no images")
+            # raise DropItem("Item contains no images")
+            pass
         else:
             item['agency_homue_logo'] = image_paths[0]
         return item
